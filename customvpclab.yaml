@@ -1,0 +1,170 @@
+Parameters:
+  VPCCidrBlock:
+    Type: String
+    Description: Enter your VPC CIDR Range
+    Default: 10.20.0.0/16
+
+  AMIID:
+    Type: String
+    Description: AMI ID
+    Default: ami-0f682fb0d11c2ae31
+
+
+Resources:
+  CustomVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+       - Key: stack
+         Value: production
+
+  CustomInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: stack
+        Value: production
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CustomVPC
+      InternetGatewayId: !Ref CustomInternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: CustomVPC
+      Tags:
+      - Key: stack
+        Value: production
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+       RouteTableId:
+         Ref: PublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId:
+         Ref: CustomInternetGateway
+
+  CustomSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CustomVPC
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone: "ca-central-1a"
+      Tags:
+      - Key: stack
+        Value: production
+      MapPublicIpOnLaunch: true
+
+  CustomSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CustomVPC
+      CidrBlock: 10.20.2.0/24
+      AvailabilityZone: "ca-central-1a"
+      Tags:
+      - Key: stack
+        Value: production
+
+  CustomSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CustomVPC
+      CidrBlock: 10.20.3.0/24
+      AvailabilityZone: "ca-central-1b"
+      Tags:
+      - Key: stack
+        Value: production
+      MapPublicIpOnLaunch: true
+
+  CustomSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CustomVPC
+      CidrBlock: 10.20.4.0/24
+      AvailabilityZone: "ca-central-1b"
+      Tags:
+      - Key: stack
+        Value: production
+
+  CustomSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: CustomSubnet1
+      RouteTableId:
+        Ref: PublicRouteTable
+  
+  CustomSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: CustomSubnet3
+      RouteTableId:
+        Ref: PublicRouteTable
+  
+  CustomSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH,HTTP and HTTPS access
+      VpcId: !Ref CustomVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 0
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: MySecurityGroup
+
+  
+  CustomEC2InstancePublic:
+     Type: 'AWS::EC2::Instance'
+     Properties: 
+        ImageId: !Ref AMIID
+        InstanceType: t2.micro
+        SubnetId: !Ref CustomSubnet1
+        SecurityGroupIds: 
+                - !Ref CustomSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+             #!/bin/bash
+             yum update -y
+             service httpd start
+             chkconfig httpd on
+
+  CustomEC2InstancePrivate:
+     Type: 'AWS::EC2::Instance'
+     Properties: 
+        ImageId: !Ref AMIID
+        InstanceType: t2.micro
+        SubnetId: !Ref CustomSubnet4
+        SecurityGroupIds: 
+                - !Ref CustomSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+             #!/bin/bash
+             yum update -y
+             service httpd start
+             chkconfig httpd on
